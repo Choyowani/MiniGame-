@@ -106,8 +106,51 @@ class Spell(pygame.sprite.Sprite):
             self.kill()
 
 
+
+class Item(pygame.sprite.Sprite):
+    def __init__(self, x, y, item_type):
+        super().__init__()
+        self.item_type = item_type
+
+        self.image = pygame.Surface((25, 25), pygame.SRCALPHA)
+        if item_type == "SLOW":
+            pygame.draw.circle(self.image, (0, 200, 255), (12, 12), 12)
+        else:
+            pygame.draw.circle(self.image, (255, 200, 0), (12, 12), 12)
+
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = 2
+
+    def update(self):
+        self.rect.y += self.speed
+
+        # 캔버스에 닿으면 발동
+        if self.rect.bottom >= HEIGHT - CANVAS_HEIGHT:
+            self.activate()
+            self.kill()
+
+    def activate(self):
+        global enemy_group, score
+
+        if self.item_type == "SLOW":
+            # 모든 적 느려짐
+            for enemy in enemy_group:
+                enemy.speed *= 0.35
+
+        else:  # BOMB
+            removed = len(enemy_group)
+            enemy_group.empty()
+
+            # 초기 적 다시 생성
+            for _ in range(INITIAL_ENEMY_COUNT):
+                enemy_group.add(Enemy())
+
+            score += removed * 10
+
+
 enemy_group = pygame.sprite.Group()
 spell_group = pygame.sprite.Group()
+item_group = pygame.sprite.Group()  
 
 # 초기 적 생성
 for _ in range(INITIAL_ENEMY_COUNT):
@@ -136,13 +179,11 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-        # ✅ GAME OVER 입력 처리
+        # GAME OVER 입력 처리
         if game_state == "GAME_OVER":
-            # Restart 버튼 클릭 처리
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if restart_button_rect.collidepoint(event.pos):
 
-                    # ✅ 게임 변수를 모두 초기화
                     enemies_passed_count = 0
                     score = 0
                     ink = MAX_INK
@@ -153,18 +194,18 @@ while running:
 
                     enemy_group.empty()
                     spell_group.empty()
+                    item_group.empty()
 
                     for _ in range(INITIAL_ENEMY_COUNT):
                         enemy_group.add(Enemy())
 
                     player_canvas.fill((0, 0, 0, 0))
-
                     game_state = "RUNNING"
 
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 running = False
 
-        # ✅ RUNNING 입력 처리
+        # RUNNING 입력 처리
         if game_state == "RUNNING":
 
             if event.type == pygame.MOUSEBUTTONDOWN and canvas_rect.collidepoint(event.pos):
@@ -214,18 +255,22 @@ while running:
                     path_points.append(new_pos)
                 last_pos = (x, canvas_y)
 
-    # ✅ RUNNING = 게임 플레이 중
+    # RUNNING 상태
     if game_state == "RUNNING":
 
         ink = min(MAX_INK, ink + 0.07)
 
+        # 적 스폰
         if current_time - last_enemy_spawn_time > ENEMY_SPAWN_INTERVAL:
             enemy_group.add(Enemy())
             last_enemy_spawn_time = current_time
 
+        # 업데이트
         spell_group.update()
         enemy_group.update()
+        item_group.update()   
 
+        # 적 통과
         enemies_to_pass = []
         for enemy in enemy_group:
             if enemy.rect.top > HEIGHT - CANVAS_HEIGHT:
@@ -256,17 +301,25 @@ while running:
                     score += 10
                     ink = min(MAX_INK, ink + 2)
 
+                    # 아이템 드랍 (25% 확률)
+                    if random.random() < 0.1:
+                        item_type = "SLOW" if random.random() < 0.8 else "BOMB"
+                        item_group.add(Item(enemy.rect.centerx, enemy.rect.centery, item_type))
+
             if spell.current_hits >= spell.max_hits:
                 spell.kill()
 
+        # 난이도 증가
         if score >= NEXT_DIFFICULTY_SCORE:
             if ENEMY_SPAWN_INTERVAL > MIN_SPAWN_INTERVAL:
                 ENEMY_SPAWN_INTERVAL -= SPAWN_DECREMENT
                 ENEMY_SPAWN_INTERVAL = max(MIN_SPAWN_INTERVAL, ENEMY_SPAWN_INTERVAL)
             NEXT_DIFFICULTY_SCORE += 500
 
+        # 그리기
         enemy_group.draw(screen)
         spell_group.draw(screen)
+        item_group.draw(screen)   
 
         if CANVAS_BG_IMAGE:
             screen.blit(CANVAS_BG_IMAGE, canvas_rect.topleft)
@@ -274,7 +327,6 @@ while running:
             pygame.draw.rect(screen, GRAY, canvas_rect)
 
         screen.blit(player_canvas, (0, HEIGHT - CANVAS_HEIGHT))
-
         pygame.draw.rect(screen, GRAY, canvas_rect, 2)
 
         pygame.draw.rect(screen, WHITE, (10, 10, MAX_INK * 3, 20), 2)
@@ -285,7 +337,7 @@ while running:
         screen.blit(score_text, (WIDTH - score_text.get_width() - 10, 10))
         screen.blit(pass_text, (WIDTH - pass_text.get_width() - 10, 40))
 
-    # ✅ GAME OVER 화면
+    # GAME OVER 화면
     elif game_state == "GAME_OVER":
 
         game_over_text = large_font.render("GAME OVER", True, RED)
@@ -296,7 +348,6 @@ while running:
         screen.blit(score_final_text, (WIDTH // 2 - score_final_text.get_width()//2, HEIGHT//2))
         screen.blit(quit_text, (WIDTH // 2 - quit_text.get_width()//2, HEIGHT//2 + 40))
 
-        # ✅ Restart 버튼 그리기
         pygame.draw.rect(screen, WHITE, restart_button_rect, border_radius=10)
         restart_text2 = font.render("RESTART", True, BLACK)
         screen.blit(
