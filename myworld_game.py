@@ -5,7 +5,7 @@ import math
 pygame.init()
 
 # 화면 설정
-WIDTH, HEIGHT = 800, 1000
+WIDTH, HEIGHT = 600, 1000
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("그림 주문 액션")
 
